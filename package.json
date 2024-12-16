@@ -8,7 +8,8 @@
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:ui": "rm -rf dist && cd ../helsinkiU/part2/phonebook && npm run build && cp -r dist ../../../helsinkiU-part3",
-    "deploy:full": "npm run build:ui && git add . && git commit -m uibuild && git push"
+    "deploy:full": "npm run build:ui && git add . && git commit -m \"Deploy UI Build: $(date '+%Y-%m-%d %H:%M')\" && git push"
+
   },
   "author": "ilovefronten",
   "license": "MIT",
