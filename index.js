@@ -131,7 +131,7 @@ app.post('/api/persons', (request, response) => {
   }
 
   phonebook = phonebook.concat(newPerson)
-  response.json(phonebook)
+  response.json(newPerson)
 })
 
 const PORT = 3001
