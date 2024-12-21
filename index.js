@@ -1,7 +1,6 @@
 require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
-const mongoose = require('mongoose')
 const Phonebook = require('./models/phonebook')
 
 const app = express()
@@ -92,7 +91,7 @@ app.get('/api/persons', (request, response, next) => {
     .then(persons => {
       response.json(persons)
     })
-    .catch(error => next(error))    
+    .catch(error => next(error))
 })
 
 app.get('/api/persons/:id', (request, response, next) => {
@@ -145,7 +144,7 @@ app.post('/api/persons', (request, response, next) => {
   const body = request.body
 
   if (!body.name) {
-    return response.status(400).json({
+    return response.status(400).json({  // 400： bad request
       error: `name missing`
     })
   }
@@ -173,18 +172,19 @@ app.post('/api/persons', (request, response, next) => {
           console.log(`added ${newPerson.name} number ${newPerson.number} to phonebook`)
           response.json(newPerson)
         })
+        .catch(error => next(error))
     })
     .catch(error => next(error))
 })
 
 
 app.put('/api/persons/:id', (request, response, next) => {
-  Phonebook.findByIdAndUpdate(request.params.id, request.body, { new: true })
+  Phonebook.findByIdAndUpdate(request.params.id, request.body, { new: true, runValidators: true, context: 'query' })
     .then(person => {
       response.json(person)
     })
     .catch(error => next(error))
-}) 
+})
 
 const unknowEndpoint = (request, response) => {
   response.status(404).send({ error: 'unknow endpoint' })
@@ -196,6 +196,8 @@ const errorHandler = (error, request, response, next) => {
 
   if (error.name === 'CastError') {
     return response.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
   }
 
   next(error)
