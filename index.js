@@ -1,9 +1,13 @@
+require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
+const mongoose = require('mongoose')
+const Phonebook = require('./models/phonebook')
 
 const app = express()
 
-app.use(express.static('dist'))
+// Middlewares
+app.use(express.static('dist')) // 设置build之后的前端网页(dist)为访问根目录时返回的网址
 app.use(express.json())
 app.use(morgan(function (tokens, req, res) {
   const logger = [
@@ -20,6 +24,16 @@ app.use(morgan(function (tokens, req, res) {
 
   return logger.join(' ')
 }))
+
+/* Phonebook
+.find({})
+.then(persons => {
+  console.log('phonebook:');
+  persons.map(person => { console.log(`${person.name} ${person.number}`) })
+  
+}) */
+
+
 
 let phonebook = [
   {
@@ -73,32 +87,52 @@ const getRequestTime = () => {
   return formattedTime
 }
 
-app.get('/api/persons', (request, response) => {
-  response.json(phonebook)
+app.get('/api/persons', (request, response, next) => {
+  Phonebook.find({})
+    .then(persons => {
+      response.json(persons)
+    })
+    .catch(error => next(error))    
 })
 
-app.get('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  const person = phonebook.find(person => person.id === id)
-  response.json(person)
+app.get('/api/persons/:id', (request, response, next) => {
+  Phonebook.findById(request.params.id)
+    .then(person => {
+      if (person) {
+        console.log(person);
+        response.json(person)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
+
 })
 
-app.get('/info', (request, response) => {
-  const people = phonebook.length
-  const time = getRequestTime()
-  const infoText = `
-    <p>Phonebook has info for ${people} people</p>
-    <p>${time}</p>
-  `
-  response.send(infoText)
+app.get('/info', (request, response, next) => {
+  Phonebook.find({})
+    .then(persons => {
+      const time = getRequestTime()
+      const people = persons.length
+      const infoText = `
+        <p>Phonebook has info for ${people} people</p>
+        <p>${time}</p>
+      `
+      response.send(infoText)
+    })
+    .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-  const id = request.params.id  // String
-  phonebook = phonebook.filter(person => person.id !== id)
-  response.status(204).end()
+app.delete('/api/persons/:id', (request, response, next) => {
+  Phonebook.findByIdAndDelete(request.params.id)
+    .then(person => {
+      console.log(`${person} is deleted!`);
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
+// 接入数据库后就不需要自己生成id了
 function getRandomId(max) {
   let id = Math.floor(Math.random() * max)
   while (phonebook.find(person => person.id === id.toString())) {
@@ -107,7 +141,7 @@ function getRandomId(max) {
   return id
 }
 
-app.post('/api/persons', (request, response) => {
+app.post('/api/persons', (request, response, next) => {
   const body = request.body
 
   if (!body.name) {
@@ -120,22 +154,57 @@ app.post('/api/persons', (request, response) => {
       error: `number missing`
     })
   }
-  if (phonebook.find(person => person.name === body.name)) {
-    return response.status(400).json({
-      error: `${body.name} already exists`
+
+  Phonebook.find({})
+    .then(persons => {
+      if (persons.find(person => person.name === body.name)) {
+        return response.status(400).json({
+          error: `${body.name} already exists`
+        })
+      }
+
+      const newPerson = new Phonebook({
+        // id: getRandomId(persons, 100000).toString(),
+        ...body
+      })
+
+      newPerson.save()
+        .then(newPerson => {
+          console.log(`added ${newPerson.name} number ${newPerson.number} to phonebook`)
+          response.json(newPerson)
+        })
     })
-  }
-
-  const newPerson = {
-    id: getRandomId(100000).toString(),
-    ...body
-  }
-
-  phonebook = phonebook.concat(newPerson)
-  response.json(newPerson)
+    .catch(error => next(error))
 })
 
-const PORT = 3001
+
+app.put('/api/persons/:id', (request, response, next) => {
+  Phonebook.findByIdAndUpdate(request.params.id, request.body, { new: true })
+    .then(person => {
+      response.json(person)
+    })
+    .catch(error => next(error))
+}) 
+
+const unknowEndpoint = (request, response) => {
+  response.status(404).send({ error: 'unknow endpoint' })
+}
+
+
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message);
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+
+app.use(unknowEndpoint)
+app.use(errorHandler)
+
+const PORT = process.env.PORT
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
